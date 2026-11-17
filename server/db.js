@@ -1,19 +1,37 @@
 import Database from 'better-sqlite3'
 import bcrypt from 'bcryptjs'
+import pg from 'pg'
 import { mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { POSTGRES_SCHEMA } from './postgres-schema.js'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const dbPath = process.env.DATABASE_PATH || resolve(root, 'data', 'fastbank.sqlite')
-if (process.env.NODE_ENV === 'production' && process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL is configured, but the application routes still require the SQLite adapter; refusing to run against an unintended database.')
-}
+const dbPath = process.env.DATABASE_PATH || (
+  process.env.NODE_ENV === 'production'
+    ? '/tmp/fastbank.sqlite'
+    : resolve(root, 'data', 'fastbank.sqlite')
+)
 mkdirSync(dirname(dbPath), { recursive: true })
 
 export const db = new Database(dbPath)
 db.pragma('journal_mode = WAL')
 db.pragma('foreign_keys = ON')
+
+export const pgPool = process.env.DATABASE_URL
+  ? new pg.Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.PGSSLMODE === 'disable' ? false : { rejectUnauthorized: true },
+      max: 3,
+      connectionTimeoutMillis: 10000,
+      idleTimeoutMillis: 10000,
+    })
+  : null
+
+export const ensurePostgresSchema = async () => {
+  if (!pgPool) return
+  await pgPool.query(POSTGRES_SCHEMA)
+}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (

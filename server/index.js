@@ -7,7 +7,7 @@ import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto'
 import { generateSecret, generateURI, verify } from 'otplib'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { audit, db, publicUser } from './db.js'
+import { audit, db, ensurePostgresSchema, pgPool, publicUser } from './db.js'
 import { isSmtpConfigured, sendPasswordResetEmail, sendRegistrationVerificationEmail } from './email.js'
 import { registerBankingRoutes } from './banking.js'
 import { registerWebAuthnRoutes } from './webauthn.js'
@@ -369,6 +369,36 @@ app.post('/api/auth/register', async (req, res) => {
     }
     throw error
   }
+  if (pgPool) {
+    try {
+      await ensurePostgresSchema()
+      await pgPool.query(`
+        INSERT INTO users (
+          id, first_name, last_name, document, phone, email, password_hash, pin_hash,
+          role, status, trust_score, totp_enabled, auth_version, created_at, updated_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'user','active',60,0,0,$9,$9)
+        ON CONFLICT (id) DO UPDATE SET
+          first_name = EXCLUDED.first_name,
+          last_name = EXCLUDED.last_name,
+          document = EXCLUDED.document,
+          phone = EXCLUDED.phone,
+          email = EXCLUDED.email,
+          password_hash = EXCLUDED.password_hash,
+          pin_hash = EXCLUDED.pin_hash,
+          updated_at = EXCLUDED.updated_at
+      `, [
+        user.id, user.firstName, user.lastName, user.document, user.phone, user.email,
+        user.passwordHash, user.pinHash, user.timestamp,
+      ])
+      await pgPool.query(`
+        INSERT INTO accounts (id, user_id, kind, name, balance, created_at)
+        VALUES ($1,$2,'checking','Cuenta principal',0,$3)
+        ON CONFLICT DO NOTHING
+      `, [`checking-${user.id}`, user.id, user.timestamp])
+    } catch (error) {
+      console.error('Neon account mirror failed.', error)
+    }
+  }
   const created = getUser(user.id)
   audit(user.id, 'auth.registered', {}, requestIp(req))
   res.status(201).json({ token: issueToken(created), user: publicUser(created) })
@@ -376,7 +406,54 @@ app.post('/api/auth/register', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   const { identifier, password, pin, code } = req.body || {}
-  const user = findByIdentifier(String(identifier || '').trim())
+  let user = findByIdentifier(String(identifier || '').trim())
+  if (!user && pgPool) {
+    try {
+      await ensurePostgresSchema()
+      const normalizedIdentifier = String(identifier || '').trim()
+      const result = await pgPool.query(
+        'SELECT * FROM users WHERE lower(email) = lower($1) OR document = $2 LIMIT 1',
+        [normalizedIdentifier, normalizedIdentifier],
+      )
+      if (result.rows[0]) {
+        const row = result.rows[0]
+        db.prepare(`
+          INSERT INTO users (
+            id, first_name, last_name, document, phone, email, password_hash, pin_hash,
+            role, status, trust_score, totp_secret, totp_pending_secret, totp_enabled,
+            auth_version, created_at, updated_at
+          ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+          ON CONFLICT(id) DO UPDATE SET
+            password_hash = excluded.password_hash,
+            pin_hash = excluded.pin_hash,
+            updated_at = excluded.updated_at
+        `).run(
+          row.id, row.first_name, row.last_name, row.document, row.phone, row.email,
+          row.password_hash, row.pin_hash, row.role, row.status, row.trust_score,
+          row.totp_secret, row.totp_pending_secret, row.totp_enabled ? 1 : 0,
+          row.auth_version || 0, row.created_at, row.updated_at,
+        )
+        const account = await pgPool.query(
+          "SELECT * FROM accounts WHERE user_id = $1 AND kind = 'checking' LIMIT 1",
+          [row.id],
+        )
+        if (account.rows[0]) {
+          db.prepare(`
+            INSERT INTO accounts (id, user_id, kind, name, goal, balance, locked, created_at)
+            VALUES (?,?,?,?,?,?,?,?)
+            ON CONFLICT(id) DO NOTHING
+          `).run(
+            account.rows[0].id, account.rows[0].user_id, account.rows[0].kind,
+            account.rows[0].name, account.rows[0].goal, account.rows[0].balance,
+            account.rows[0].locked, account.rows[0].created_at,
+          )
+        }
+        user = findByIdentifier(normalizedIdentifier)
+      }
+    } catch (error) {
+      console.error('Neon login fallback failed.', error)
+    }
+  }
   if (!user || !(await bcrypt.compare(String(password || ''), user.password_hash))) {
     return res.status(401).json({ message: 'Credenciales incorrectas.' })
   }
