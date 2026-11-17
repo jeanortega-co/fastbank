@@ -8,6 +8,19 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+.env*
+!.env.example
+/data/
+/Fastbank/
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-wal
+*.db-shm
+*-wal
+*-shm
 .DS_Store
 dist
 dist-ssr
@@ -37,3 +50,6 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
+
+.vercel
+.env*
