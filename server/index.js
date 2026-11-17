@@ -780,6 +780,27 @@ app.post('/api/cards/requests', requireAuth, (req, res) => {
     }
   })
   createRequests()
+  if (pgPool) {
+    Promise.all(cardsToCreate.map((request) => pgPool.query(`
+      INSERT INTO card_requests (
+        id, user_id, first_name, last_name, document, phone, email,
+        card_type, card_kind, card_number, cvv, card_status, card_limit,
+        address, city, department, postal_code, estimated_ready_at, status, created_at
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20
+      ) ON CONFLICT (id) DO NOTHING
+    `, [
+      request.id, req.user.id, req.user.first_name, req.user.last_name,
+      req.user.document, req.user.phone, req.user.email, request.cardType,
+      request.cardKind, request.card.cardNumber, request.card.cvv,
+      request.cardStatus, request.cardLimit,
+      request.cardType === 'physical' ? address.trim() : null,
+      request.cardType === 'physical' ? city.trim() : null,
+      request.cardType === 'physical' ? department.trim() : null,
+      request.cardType === 'physical' ? (postalCode || '').trim() || null : null,
+      request.estimatedReadyAt, request.status, timestamp,
+    ]))).catch((error) => console.error('Neon card request mirror failed.', error))
+  }
 
   const messages = cardsToCreate.map((request) => request.cardType === 'digital'
     ? `Tarjeta digital de ${request.cardKind === 'debit' ? 'débito' : 'crédito'} activa inmediatamente para usar en Fastbank.`
@@ -863,6 +884,15 @@ app.post('/api/support/requests', requireAuth, (req, res) => {
     INSERT INTO support_requests (id, user_id, category, subject, message, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(id, req.user.id, category, subject, message, timestamp, timestamp)
+  if (pgPool) {
+    pgPool.query(`
+      INSERT INTO support_requests (id, user_id, category, subject, message, status, created_at, updated_at)
+      VALUES ($1,$2,$3,$4,$5,'open',$6,$6)
+      ON CONFLICT (id) DO NOTHING
+    `, [id, req.user.id, category, subject, message, timestamp]).catch((error) => {
+      console.error('Neon support request mirror failed.', error)
+    })
+  }
   audit(req.user.id, 'support.request.created', { requestId: id, category })
   const request = db.prepare(`
     SELECT id, category, subject, message, status, response, created_at AS createdAt, updated_at AS updatedAt
