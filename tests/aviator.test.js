@@ -324,7 +324,7 @@ test('Aviator state hides crash data before the crash and stream tickets are sin
   assert.ok(Object.hasOwn(bettingState.data.round, 'serverSeedHash'))
   assert.ok(!Object.hasOwn(bettingState.data.round, 'crashPoint'))
 
-  db.prepare("UPDATE aviator_rounds SET status = 'flying', started_at = ? WHERE id = ?")
+  db.prepare("UPDATE aviator_rounds SET status = 'flying', crash_point = 1000, started_at = ? WHERE id = ?")
     .run(new Date(Date.now() - 5000).toISOString(), round.id)
 
   const flyingState = await request('/api/casino/aviator/state')
@@ -346,6 +346,21 @@ test('Aviator state hides crash data before the crash and stream tickets are sin
   const replayStream = await fetch(`${origin}/api/casino/aviator/stream?ticket=${encodeURIComponent(ticketRequest.data.ticket)}`)
   assert.equal(replayStream.status, 401)
   assert.ok(!replayStream.headers.get('content-type')?.includes('text/event-stream'))
+})
+
+test('Aviator state request advances and closes an expired flying round', async () => {
+  createFixtureUser()
+  const round = banking.aviator.createRound()
+  db.prepare(`
+    UPDATE aviator_rounds
+    SET status = 'flying', crash_point = 1.01, started_at = ?, betting_ends_at = ?
+    WHERE id = ?
+  `).run(new Date(Date.now() - 60000).toISOString(), new Date(Date.now() - 70000).toISOString(), round.id)
+
+  const result = await request('/api/casino/aviator/state')
+  assert.equal(result.status, 200)
+  assert.equal(result.data.round.status, 'crashed')
+  assert.equal(result.data.round.crashPoint, 1.01)
 })
 
 test('Aviator betting works in betting phase and fails clearly outside of it', async () => {

@@ -5,6 +5,7 @@ import { useBankStore } from '@/stores/bank'
 import { useAviatorStore } from '@/stores/aviator'
 import SidebarNav from '@/components/SidebarNav.vue'
 import AviatorCanvas from '@/components/AviatorCanvas.vue'
+import { calculateDisplayedMultiplier, MAX_AVIATOR_MULTIPLIER } from '@/utils/aviatorMultiplier'
 
 const bankStore = useBankStore()
 const aviatorStore = useAviatorStore()
@@ -30,14 +31,14 @@ const myBets = computed(() => aviatorStore.history?.bets || [])
 const currentMultiplier = computed(() => {
   const round = currentRound.value
   if (!round || !round.startedAt || round.status !== 'flying') return 1
-  const startedAt = Date.parse(round.startedAt)
-  if (!Number.isFinite(startedAt)) return 1
-  return Number(Math.max(1, Math.exp(Math.max(0, now.value - aviatorStore.clockOffset - startedAt) / 10000)).toFixed(2))
+  return Number(calculateDisplayedMultiplier(round.startedAt, now.value, aviatorStore.clockOffset).toFixed(2))
 })
 
 const finalMultiplier = computed(() => {
   const crash = Number(currentRound.value?.crashPoint || currentMultiplier.value || 1)
-  return Number.isFinite(crash) ? Number(crash.toFixed(2)) : 1
+  return Number.isFinite(crash)
+    ? Number(Math.min(MAX_AVIATOR_MULTIPLIER, Math.max(1, crash)).toFixed(2))
+    : 1
 })
 
 const countdown = computed(() => {
@@ -302,14 +303,26 @@ onMounted(() => {
   const simulatedTimer = window.setInterval(syncSimulatedEntries, 1200)
   window.__aviatorSimulatedTick = simulatedTimer
 
-  aviatorStore.loadState()
+  aviatorStore.loadState().catch((error) => {
+    aviatorStore.error = error.message
+  })
   aviatorStore.loadHistory()
   aviatorStore.connectSse()
+  const statePoll = window.setInterval(() => {
+    if (document.visibilityState === 'visible' && !aviatorStore.isLoading) {
+      aviatorStore.loadState().catch((error) => {
+        aviatorStore.error = error.message
+      })
+    }
+  }, 1000)
+  window.__aviatorStatePoll = statePoll
 
   const syncOnVisible = () => {
     if (document.visibilityState === 'visible') {
       now.value = Date.now()
-      aviatorStore.loadState()
+      aviatorStore.loadState().catch((error) => {
+        aviatorStore.error = error.message
+      })
       aviatorStore.loadHistory()
       aviatorStore.connectSse()
     }
@@ -329,6 +342,10 @@ onBeforeUnmount(() => {
   if (window.__aviatorSimulatedTick) {
     window.clearInterval(window.__aviatorSimulatedTick)
     delete window.__aviatorSimulatedTick
+  }
+  if (window.__aviatorStatePoll) {
+    window.clearInterval(window.__aviatorStatePoll)
+    delete window.__aviatorStatePoll
   }
   if (window.__aviatorVisibilitySync) {
     document.removeEventListener('visibilitychange', window.__aviatorVisibilitySync)

@@ -332,10 +332,7 @@ export const registerAviatorService = ({
   }
 
   app.get('/api/casino/aviator/state', requireAuth, (req, res) => {
-    let round = getCurrentRound()
-    if (!round) {
-      round = advance()
-    }
+    const round = advance()
     res.json({ serverTime: Date.now(), round: publicRound(round, req.user.id) })
   })
 
@@ -360,7 +357,7 @@ export const registerAviatorService = ({
     }
 
     const syncSnapshot = () => {
-      const round = getCurrentRound() || advance()
+      const round = advance()
       return { serverTime: Date.now(), round: publicRound(round, req.user.id) }
     }
 
