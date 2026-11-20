@@ -300,42 +300,58 @@ db.exec(`
 `)
 
 const now = () => new Date().toISOString()
-const seedUser = db.prepare('SELECT id FROM users WHERE email = ?').get('ana@gmail.com')
-if (!seedUser) {
-  const timestamp = now()
-  db.prepare(`
-    INSERT INTO users (id, first_name, last_name, document, phone, email, password_hash, pin_hash, role, trust_score, created_at, updated_at)
-    VALUES (@id, @firstName, @lastName, @document, @phone, @email, @passwordHash, @pinHash, 'user', 82, @timestamp, @timestamp)
-  `).run({
-    id: 'demo-user-fastbank',
-    firstName: 'Ana',
-    lastName: 'García',
-    document: '1002345678',
-    phone: '3001234567',
-    email: 'ana@gmail.com',
-    passwordHash: bcrypt.hashSync('REMOVED', 12),
-    pinHash: bcrypt.hashSync('REMOVED', 12),
-    timestamp,
-  })
-}
+if (process.env.FASTBANK_SEED_DEMO_USERS === 'true') {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Las cuentas de demostración solo pueden habilitarse fuera de producción.')
+  }
 
-const seedAdmin = db.prepare('SELECT id FROM users WHERE email = ?').get('fastbank@gmail.com')
-if (!seedAdmin) {
-  const timestamp = now()
-  db.prepare(`
-    INSERT INTO users (id, first_name, last_name, document, phone, email, password_hash, pin_hash, role, trust_score, created_at, updated_at)
-    VALUES (@id, @firstName, @lastName, @document, @phone, @email, @passwordHash, @pinHash, 'admin', 99, @timestamp, @timestamp)
-  `).run({
-    id: 'admin-fastbank',
-    firstName: 'Fastbank',
-    lastName: 'Admin',
-    document: '9000000000',
-    phone: '3018489400',
-    email: 'fastbank@gmail.com',
-    passwordHash: bcrypt.hashSync('REMOVED', 12),
-    pinHash: bcrypt.hashSync('REMOVED', 12),
-    timestamp,
-  })
+  const demoCredentials = [
+    process.env.DEMO_USER_PASSWORD,
+    process.env.DEMO_USER_PIN,
+    process.env.DEMO_ADMIN_PASSWORD,
+    process.env.DEMO_ADMIN_PIN,
+  ]
+  if (demoCredentials.some((credential) => !credential)) {
+    throw new Error('Configura DEMO_USER_PASSWORD, DEMO_USER_PIN, DEMO_ADMIN_PASSWORD y DEMO_ADMIN_PIN para crear las cuentas de demostración.')
+  }
+
+  const seedUser = db.prepare('SELECT id FROM users WHERE email = ?').get('ana@gmail.com')
+  if (!seedUser) {
+    const timestamp = now()
+    db.prepare(`
+      INSERT INTO users (id, first_name, last_name, document, phone, email, password_hash, pin_hash, role, trust_score, created_at, updated_at)
+      VALUES (@id, @firstName, @lastName, @document, @phone, @email, @passwordHash, @pinHash, 'user', 82, @timestamp, @timestamp)
+    `).run({
+      id: 'demo-user-fastbank',
+      firstName: 'Ana',
+      lastName: 'García',
+      document: '1002345678',
+      phone: '3001234567',
+      email: 'ana@gmail.com',
+      passwordHash: bcrypt.hashSync(process.env.DEMO_USER_PASSWORD, 12),
+      pinHash: bcrypt.hashSync(process.env.DEMO_USER_PIN, 12),
+      timestamp,
+    })
+  }
+
+  const seedAdmin = db.prepare('SELECT id FROM users WHERE email = ?').get('fastbank@gmail.com')
+  if (!seedAdmin) {
+    const timestamp = now()
+    db.prepare(`
+      INSERT INTO users (id, first_name, last_name, document, phone, email, password_hash, pin_hash, role, trust_score, created_at, updated_at)
+      VALUES (@id, @firstName, @lastName, @document, @phone, @email, @passwordHash, @pinHash, 'admin', 99, @timestamp, @timestamp)
+    `).run({
+      id: 'admin-fastbank',
+      firstName: 'Fastbank',
+      lastName: 'Admin',
+      document: '9000000000',
+      phone: '3018489400',
+      email: 'fastbank@gmail.com',
+      passwordHash: bcrypt.hashSync(process.env.DEMO_ADMIN_PASSWORD, 12),
+      pinHash: bcrypt.hashSync(process.env.DEMO_ADMIN_PIN, 12),
+      timestamp,
+    })
+  }
 }
 
 db.prepare('UPDATE users SET card_number = NULL, cvv = NULL WHERE card_number IS NOT NULL OR cvv IS NOT NULL').run()

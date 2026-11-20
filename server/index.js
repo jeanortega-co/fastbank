@@ -14,10 +14,10 @@ import { registerWebAuthnRoutes } from './webauthn.js'
 
 const app = express()
 const port = Number(process.env.PORT || 3002)
-const jwtSecret = process.env.JWT_SECRET || 'REMOVED'
 const isProduction = process.env.NODE_ENV === 'production'
+const jwtSecret = process.env.JWT_SECRET || (isProduction ? '' : randomBytes(32).toString('hex'))
 
-if (isProduction && jwtSecret === 'REMOVED') {
+if (isProduction && !jwtSecret) {
   throw new Error('JWT_SECRET debe configurarse en producción.')
 }
 

@@ -1,55 +1,38 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-node_modules
-.env*
+# Environment files and credentials
+.env
+.env.*
 !.env.example
-/data/
-/Fastbank/
+*.key
+*.pem
+**/*smtp*credentials*
+
+# Dependencies and generated output
+node_modules/
+dist/
+build/
+.vite/
+.vercel/
+coverage/
+
+# Local databases and SQLite sidecars
+*.db
+*.db-*
 *.sqlite
 *.sqlite-*
 *.sqlite3
 *.sqlite3-*
-*.db
-*.db-wal
-*.db-shm
-*-wal
-*-shm
+
+# Logs, temporary files, and operating-system metadata
+*.log
+*.tmp
+*.temp
+*.swp
 .DS_Store
-dist
-dist-ssr
-coverage
-*.local
+Thumbs.db
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+# Local editor settings
+.vscode/
+.idea/
 
-*.tsbuildinfo
-
-.eslintcache
-
-# Cypress
-/cypress/videos/
-/cypress/screenshots/
-
-# Vitest
-__screenshots__/
-
-# Vite
-*.timestamp-*-*.mjs
-
-.vercel
-.env*
+# Legacy standalone app kept locally, not part of the root project
+/Fastbank/

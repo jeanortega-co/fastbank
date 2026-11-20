@@ -8,9 +8,15 @@ import { once } from 'node:events'
 import { sendPasswordResetEmail, sendRegistrationVerificationEmail } from '../server/email.js'
 
 const testDirectory = mkdtempSync(join(tmpdir(), 'fastbank-banking-'))
+process.env.NODE_ENV = 'test'
 process.env.DATABASE_PATH = join(testDirectory, 'fastbank.sqlite')
 process.env.JWT_SECRET = 'REMOVED'
 process.env.CLIENT_ORIGIN = 'http://localhost:5173,http://192.168.1.50:5173,https://fastbank-5173.example-tunnel'
+process.env.FASTBANK_SEED_DEMO_USERS = 'true'
+process.env.DEMO_USER_PASSWORD = 'REMOVED'
+process.env.DEMO_USER_PIN = 'REMOVED'
+process.env.DEMO_ADMIN_PASSWORD = 'REMOVED'
+process.env.DEMO_ADMIN_PIN = 'REMOVED'
 process.env.SMTP_HOST = ''
 process.env.SMTP_PORT = ''
 process.env.SMTP_USER = ''
