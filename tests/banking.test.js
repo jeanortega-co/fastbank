@@ -1,22 +1,26 @@
 import assert from 'node:assert/strict'
 import { after, test } from 'node:test'
 import { mkdtempSync, rmSync } from 'node:fs'
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes, randomInt } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { once } from 'node:events'
 import { sendPasswordResetEmail, sendRegistrationVerificationEmail } from '../server/email.js'
 
 const testDirectory = mkdtempSync(join(tmpdir(), 'fastbank-banking-'))
+const demoUserPassword = randomBytes(32).toString('hex')
+const demoUserPin = String(randomInt(1000, 10000))
+const demoAdminPassword = randomBytes(32).toString('hex')
+const demoAdminPin = String(randomInt(1000, 10000))
 process.env.NODE_ENV = 'test'
 process.env.DATABASE_PATH = join(testDirectory, 'fastbank.sqlite')
-process.env.JWT_SECRET = 'REMOVED'
+process.env.JWT_SECRET = randomBytes(32).toString('hex')
 process.env.CLIENT_ORIGIN = 'http://localhost:5173,http://192.168.1.50:5173,https://fastbank-5173.example-tunnel'
 process.env.FASTBANK_SEED_DEMO_USERS = 'true'
-process.env.DEMO_USER_PASSWORD = 'REMOVED'
-process.env.DEMO_USER_PIN = 'REMOVED'
-process.env.DEMO_ADMIN_PASSWORD = 'REMOVED'
-process.env.DEMO_ADMIN_PIN = 'REMOVED'
+process.env.DEMO_USER_PASSWORD = demoUserPassword
+process.env.DEMO_USER_PIN = demoUserPin
+process.env.DEMO_ADMIN_PASSWORD = demoAdminPassword
+process.env.DEMO_ADMIN_PIN = demoAdminPin
 process.env.SMTP_HOST = ''
 process.env.SMTP_PORT = ''
 process.env.SMTP_USER = ''
@@ -246,7 +250,7 @@ test('PIN reset request validates the email and does not reveal unknown accounts
 })
 
 test('WebAuthn prepara retos de registro y login ligados al dominio autorizado', async () => {
-  const anaToken = await login('ana@gmail.com', 'REMOVED', 'REMOVED')
+  const anaToken = await login('ana@gmail.com', demoUserPassword, demoUserPin)
   const origin = 'http://localhost:5173'
   const registration = await request('/api/auth/passkeys/registration-options', {
     method: 'POST',
@@ -276,7 +280,7 @@ test('WebAuthn prepara retos de registro y login ligados al dominio autorizado',
 })
 
 test('WebAuthn usa el dominio HTTPS del Referer cuando un túnel reescribe Origin', async () => {
-  const anaToken = await login('ana@gmail.com', 'REMOVED', 'REMOVED')
+  const anaToken = await login('ana@gmail.com', demoUserPassword, demoUserPin)
   const registration = await request('/api/auth/passkeys/registration-options', {
     method: 'POST',
     token: anaToken,
@@ -299,7 +303,7 @@ test('RP ID configurado para túnel no rompe el acceso desde localhost', async (
   const previousRpID = process.env.WEBAUTHN_RP_ID
   process.env.WEBAUTHN_RP_ID = 'fastbank-5173.example-tunnel'
   try {
-    const anaToken = await login('ana@gmail.com', 'REMOVED', 'REMOVED')
+    const anaToken = await login('ana@gmail.com', demoUserPassword, demoUserPin)
     const optionsFor = async (referer) => request('/api/auth/passkeys/registration-options', {
       method: 'POST',
       token: anaToken,
@@ -319,7 +323,7 @@ test('RP ID configurado para túnel no rompe el acceso desde localhost', async (
 })
 
 test('investment positions debit the account, enforce the agreed term, and pay the closing value once', async () => {
-  const token = await login('ana@gmail.com', 'REMOVED', 'REMOVED')
+  const token = await login('ana@gmail.com', demoUserPassword, demoUserPin)
   const account = db.prepare("SELECT id, balance FROM accounts WHERE user_id = 'demo-user-fastbank' AND kind = 'checking'").get()
   const holdings = db.prepare("SELECT balance FROM accounts WHERE id = 'system-investment-holdings'").get()
   const market = await request('/api/investments', { token })
@@ -429,7 +433,7 @@ test('investment positions debit the account, enforce the agreed term, and pay t
 })
 
 test('banking operations persist atomically with balanced ledger entries', async () => {
-  const anaToken = await login('ana@gmail.com', 'REMOVED', 'REMOVED')
+  const anaToken = await login('ana@gmail.com', demoUserPassword, demoUserPin)
   let result = await request('/api/banking/summary', { token: anaToken })
   assert.equal(result.status, 200)
   assert.equal(result.data.account.balance, 1000000)
@@ -449,7 +453,7 @@ test('banking operations persist atomically with balanced ledger entries', async
   const mySupportRequests = await request('/api/support/requests', { token: anaToken })
   assert.equal(mySupportRequests.status, 200)
   assert.equal(mySupportRequests.data.requests[0].id, supportRequest.data.request.id)
-  const supportAdminToken = await login('fastbank@gmail.com', 'REMOVED', 'REMOVED')
+  const supportAdminToken = await login('fastbank@gmail.com', demoAdminPassword, demoAdminPin)
   const adminSupportRequests = await request('/api/admin/support/requests', { token: supportAdminToken })
   assert.equal(adminSupportRequests.status, 200)
   assert.equal(adminSupportRequests.data.requests[0].email, 'ana@gmail.com')
@@ -661,7 +665,7 @@ test('banking operations persist atomically with balanced ledger entries', async
   assert.equal(card.status, 200)
   assert.equal(card.data.cardLocked, true)
 
-  const adminToken = await login('fastbank@gmail.com', 'REMOVED', 'REMOVED')
+  const adminToken = await login('fastbank@gmail.com', demoAdminPassword, demoAdminPin)
   const reversal = await request(`/api/transactions/${transferId}/reverse`, { method: 'POST', token: adminToken })
   assert.equal(reversal.status, 200)
   assert.equal(reversal.data.transaction.status, 'Procesado')
@@ -1091,8 +1095,8 @@ test('banking operations persist atomically with balanced ledger entries', async
 })
 
 test('admin password reset uses a one-time hashed code and invalidates previous sessions', async () => {
-  const oldUserSession = await login('ana@gmail.com', 'REMOVED', 'REMOVED')
-  const adminToken = await login('fastbank@gmail.com', 'REMOVED', 'REMOVED')
+  const oldUserSession = await login('ana@gmail.com', demoUserPassword, demoUserPin)
+  const adminToken = await login('fastbank@gmail.com', demoAdminPassword, demoAdminPin)
   const originalPinHash = db.prepare('SELECT pin_hash FROM users WHERE id = ?').get('demo-user-fastbank').pin_hash
 
   const unauthenticatedIssue = await request('/api/admin/users/demo-user-fastbank/password-reset', {
@@ -1154,13 +1158,13 @@ test('admin password reset uses a one-time hashed code and invalidates previous 
 
   const oldPasswordLogin = await request('/api/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ identifier: 'ana@gmail.com', password: 'REMOVED', pin: 'REMOVED' }),
+    body: JSON.stringify({ identifier: 'ana@gmail.com', password: demoUserPassword, pin: demoUserPin }),
   })
   assert.equal(oldPasswordLogin.status, 401)
 
   const newPasswordLogin = await request('/api/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ identifier: 'ana@gmail.com', password: 'abcd', pin: 'REMOVED' }),
+    body: JSON.stringify({ identifier: 'ana@gmail.com', password: 'abcd', pin: demoUserPin }),
   })
   assert.equal(newPasswordLogin.status, 200)
 
@@ -1193,7 +1197,7 @@ test('admin password reset uses a one-time hashed code and invalidates previous 
 })
 
 test('email PIN reset validates four digits, consumes only PIN codes, and invalidates old sessions', async () => {
-  const oldUserSession = await login('ana@gmail.com', 'abcd', 'REMOVED')
+  const oldUserSession = await login('ana@gmail.com', 'abcd', demoUserPin)
   const token = '20486'
   const timestamp = new Date().toISOString()
   db.prepare(`
@@ -1234,7 +1238,7 @@ test('email PIN reset validates four digits, consumes only PIN codes, and invali
 
   const oldPinLogin = await request('/api/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ identifier: 'ana@gmail.com', password: 'abcd', pin: 'REMOVED' }),
+    body: JSON.stringify({ identifier: 'ana@gmail.com', password: 'abcd', pin: demoUserPin }),
   })
   assert.equal(oldPinLogin.status, 401)
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { after, test } from 'node:test'
-import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,13 +11,13 @@ import { calculateCrashPoint } from '../server/services/aviator.js'
 const testDirectory = mkdtempSync(join(tmpdir(), 'fastbank-aviator-'))
 process.env.NODE_ENV = 'test'
 process.env.DATABASE_PATH = join(testDirectory, 'fastbank.sqlite')
-process.env.JWT_SECRET = 'REMOVED'
+process.env.JWT_SECRET = randomBytes(32).toString('hex')
 process.env.CLIENT_ORIGIN = 'http://localhost:5173'
 process.env.FASTBANK_SEED_DEMO_USERS = 'true'
-process.env.DEMO_USER_PASSWORD = 'REMOVED'
-process.env.DEMO_USER_PIN = 'REMOVED'
-process.env.DEMO_ADMIN_PASSWORD = 'REMOVED'
-process.env.DEMO_ADMIN_PIN = 'REMOVED'
+process.env.DEMO_USER_PASSWORD = randomBytes(32).toString('hex')
+process.env.DEMO_USER_PIN = String(randomInt(1000, 10000))
+process.env.DEMO_ADMIN_PASSWORD = randomBytes(32).toString('hex')
+process.env.DEMO_ADMIN_PIN = String(randomInt(1000, 10000))
 process.env.SMTP_HOST = ''
 process.env.SMTP_PORT = ''
 process.env.SMTP_USER = ''
