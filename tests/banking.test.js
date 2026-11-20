@@ -8,6 +8,7 @@ import { once } from 'node:events'
 import { sendPasswordResetEmail, sendRegistrationVerificationEmail } from '../server/email.js'
 
 const testDirectory = mkdtempSync(join(tmpdir(), 'fastbank-banking-'))
+const testSmtpPassword = randomBytes(32).toString('hex')
 const demoUserPassword = randomBytes(32).toString('hex')
 const demoUserPin = String(randomInt(1000, 10000))
 const demoAdminPassword = randomBytes(32).toString('hex')
@@ -79,7 +80,7 @@ test('password reset email uses the registered address and includes the expiring
       SMTP_PORT: '465',
       SMTP_SECURE: 'true',
       SMTP_USER: 'sender@example.test',
-      SMTP_PASS: 'REMOVED',
+      SMTP_PASS: testSmtpPassword,
       SMTP_FROM: 'Fastbank <sender@example.test>',
     },
     createTransport(options) {
@@ -108,7 +109,7 @@ test('password reset email uses the registered address and includes the expiring
       SMTP_PORT: '465',
       SMTP_SECURE: 'true',
       SMTP_USER: 'sender@example.test',
-      SMTP_PASS: 'REMOVED',
+      SMTP_PASS: testSmtpPassword,
       SMTP_FROM: 'Fastbank <sender@example.test>',
     },
     createTransport() {
@@ -134,7 +135,7 @@ test('registration verification email sends the five-digit code to the supplied 
       SMTP_PORT: '465',
       SMTP_SECURE: 'true',
       SMTP_USER: 'sender@example.test',
-      SMTP_PASS: 'REMOVED',
+      SMTP_PASS: testSmtpPassword,
       SMTP_FROM: 'Fastbank <sender@example.test>',
     },
     createTransport() {
@@ -160,7 +161,7 @@ test('registration verification email sends the five-digit code to the supplied 
         SMTP_PORT: '465',
         SMTP_SECURE: 'true',
         SMTP_USER: 'sender@example.test',
-        SMTP_PASS: 'REMOVED',
+        SMTP_PASS: testSmtpPassword,
         SMTP_FROM: 'Fastbank <sender@example.test>',
       },
       createTransport() {
@@ -186,7 +187,7 @@ test('password reset request validates the email and does not reveal unknown acc
     SMTP_HOST: 'smtp.example.test',
     SMTP_PORT: '465',
     SMTP_USER: 'sender@example.test',
-    SMTP_PASS: 'REMOVED',
+    SMTP_PASS: testSmtpPassword,
     SMTP_FROM: 'Fastbank <sender@example.test>',
   })
   const unknownAccount = await request('/api/auth/password-reset/request', {
@@ -230,7 +231,7 @@ test('PIN reset request validates the email and does not reveal unknown accounts
     SMTP_HOST: 'smtp.example.test',
     SMTP_PORT: '465',
     SMTP_USER: 'sender@example.test',
-    SMTP_PASS: 'REMOVED',
+    SMTP_PASS: testSmtpPassword,
     SMTP_FROM: 'Fastbank <sender@example.test>',
   })
   const unknownAccount = await request('/api/auth/pin-reset/request', {
